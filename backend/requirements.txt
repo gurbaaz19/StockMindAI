@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+yfinance
+langchain
+langgraph
+langchain-core
+langchain-google-genai
+langchain-openai
+pydantic
+sqlalchemy
+apscheduler
+python-dotenv
+duckduckgo-search
+beautifulsoup4
+requests
