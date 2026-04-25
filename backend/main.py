@@ -160,7 +160,7 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 
-@app.get("/api/recommendations", response_model=List[RecommendationResponse])
+@app.get("/api/recommendations")
 def get_recommendations(db: Session = Depends(get_db)):
     latest_recs = []
     unique_tickers = db.query(Recommendation.ticker).distinct().all()
@@ -172,7 +172,7 @@ def get_recommendations(db: Session = Depends(get_db)):
             .first()
         )
         if rec and (rec.current_price or 0) > 0:
-            latest_recs.append(rec)
+            latest_recs.append(_rec_to_dict(rec))
     return latest_recs
 
 
