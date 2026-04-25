@@ -1,22 +1,24 @@
 # 📈 StockMind AI: Long-term Stock Recommendation Engine
 
-AI-powered stock analysis for **global markets** — US, India, UK, Europe, Japan, Hong Kong, Australia, Canada, crypto, and more. Built simulating a full software development team (PM, Backend Dev, AI/Agent Dev, Frontend Dev).
+AI-powered stock analysis for **global markets** — US, India, UK, Europe, Japan, Hong Kong, Australia, Canada, crypto, and more. Built with a full-stack architecture featuring a multi-agent AI backend and a modern React frontend.
 
 ## Features
 
-- **AI analysis** — LangGraph + Gemini/OpenAI produces Buy/Hold/Sell recommendations with confidence scores and detailed reasoning.
-- **Global market support** — resolves the correct country flag, currency symbol, and exchange for 50+ suffixes (`.NS`, `.L`, `.DE`, `.T`, `.HK`, `.AX`, `.TO`, `.SA`, and more) plus bare US tickers and crypto pairs like `BTC-USD`.
-- **Price history charts** — interactive Recharts line chart inside each asset modal with 1M / 3M / 6M / 1Y / 5Y period selector.
-- **FX Converter** — live exchange rates via Yahoo Finance with a 1-month rate history chart. Supports 30+ currency pairs.
-- **Curated AI baskets** — ask the LLM for a country-specific portfolio of 3–5 top stocks/ETFs.
+- **AI analysis** — LangGraph orchestrates DuckDuckGo News + Yahoo Finance data, analyzed by Gemini 2.5 Flash or GPT-4 to produce Buy/Hold/Sell recommendations with confidence scores.
+- **Searchable FX Converter** — Live exchange rates with a **searchable selector** supporting **150+ global currencies** with flags. Includes historical rate charts with 1M to 5Y period selection.
+- **Risk-Based AI Baskets** — Generate curated portfolios of 3–5 top assets based on **Risk Tolerance** (Low, Medium, High). Assets are assigned specific percentage weights tailored to the risk profile.
+- **Indian Mutual Funds** — Dedicated tab for discovering and analyzing high-quality **Indian Mutual Funds and ETFs** (NIFTYBEES, GOLDBEES, etc.) using local exchange symbols.
+- **Saved Baskets & Dashboard** — Name and save any curated basket to your dashboard. The dashboard provides a visual breakdown of your saved portfolios with **percentage allocation progress bars**.
+- **Global market support** — Resolves the correct country flag, currency symbol, and exchange for almost any global ticker suffix (`.NS`, `.L`, `.DE`, `.T`, `.HK`, `.AX`, `.TO`, `.SA`, etc.).
+- **Price history charts** — Interactive Recharts line chart inside each asset modal with 1M / 3M / 6M / 1Y / 5Y period selector.
 - **Real-time WebSocket** updates push new analyses to all connected clients the moment they complete.
 - **Hourly background refresh** for a configurable watchlist via APScheduler.
 
 ## Architecture
 
 - **Backend**: FastAPI · APScheduler · SQLAlchemy (SQLite) · yfinance · LangGraph
-- **AI Agent**: LangGraph orchestrating DuckDuckGo News + Yahoo Finance, analyzed by Gemini or OpenAI
-- **Frontend**: React 19 + Vite · Recharts · Glassmorphic CSS
+- **AI Agent**: LangGraph stateful execution of data fetching and LLM analysis nodes.
+- **Frontend**: React 19 + Vite · Recharts · Glassmorphic CSS · Lucide Icons
 
 ## 🚀 Getting Started
 
@@ -27,7 +29,7 @@ cd backend
 python -m venv venv
 source venv/bin/activate      # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env          # then fill in your API key
+cp .env.example .env          # then fill in your Gemini/OpenAI API keys
 uvicorn main:app --reload
 ```
 
@@ -48,16 +50,14 @@ Open `http://localhost:5173`.
 
 | Example | Exchange | Currency |
 | ------- | -------- | -------- |
-| `AAPL`, `MSFT` | NYSE / NASDAQ | USD |
+| `AAPL`, `MSFT` | NYSE / NASDAQ | USD $ |
 | `RELIANCE.NS`, `HDFCBANK.NS` | NSE India | INR ₹ |
+| `0P0000XW8F.BO` | Indian Mutual Fund | INR ₹ |
 | `BARC.L` | London Stock Exchange | GBP £ |
 | `SAP.DE` | XETRA Germany | EUR € |
 | `7203.T` | Tokyo | JPY ¥ |
 | `0700.HK` | HKEX | HKD HK$ |
-| `BHP.AX` | ASX Australia | AUD A$ |
-| `RY.TO` | TSX Canada | CAD C$ |
-| `VALE3.SA` | B3 Brazil | BRL R$ |
-| `BTC-USD`, `ETH-USD` | Crypto | USD |
+| `BTC-USD`, `ETH-USD` | Crypto | USD $ |
 
 ## API Endpoints
 
@@ -65,9 +65,12 @@ Open `http://localhost:5173`.
 | ------ | ---- | ----------- |
 | `GET` | `/api/recommendations` | Latest recommendation per tracked ticker |
 | `POST` | `/api/analyze/{ticker}` | Trigger analysis for any ticker |
+| `GET` | `/api/asset?ticker=AAPL` | Full snapshot with valuation & intrinsic value proxy |
 | `GET` | `/api/history/{ticker}?period=1mo` | OHLCV price history |
 | `GET` | `/api/forex/{base}/{quote}?period=1mo` | FX rate + history |
-| `GET` | `/api/basket/{country}` | AI-curated country basket |
+| `GET` | `/api/basket/{market}?risk=Medium` | AI-curated weighted basket |
+| `GET` | `/api/baskets` | List all saved baskets |
+| `POST` | `/api/baskets` | Save a new named basket |
 | `WS` | `/ws` | Real-time push for new recommendations |
 
 Valid `period` values: `1d 5d 1mo 3mo 6mo 1y 2y 5y 10y ytd max`
@@ -76,6 +79,6 @@ Valid `period` values: `1d 5d 1mo 3mo 6mo 1y 2y 5y 10y ytd max`
 
 1. **Data Node** — fetches market cap, P/E, 1-month price history, dividend yield via `yfinance`; recent news via DuckDuckGo.
 2. **Analysis Node** — feeds structured data to the LLM (Gemini 2.5 Flash or GPT-4) acting as a Wall Street quant analyst.
-3. Result is persisted to SQLite and broadcast over WebSocket.
+3. **Persistence & Broadcast** — Result is persisted to SQLite and broadcast over WebSocket for instant UI updates.
 
 Orchestrated by **LangGraph** for robust stateful graph execution.
