@@ -11,12 +11,18 @@ from schemas import RecommendationResponse, BasketCreate, BasketResponse
 from agent import run_agent, generate_basket
 from utils import get_stock_data, get_price_history, get_exchange_rate, search_tickers
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 app = FastAPI(title="StockMind AI Recommendation API")
 
 from fastapi.middleware.cors import CORSMiddleware
+frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[frontend_url],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

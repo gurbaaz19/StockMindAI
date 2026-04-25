@@ -9,8 +9,8 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
-const API_BASE = "http://localhost:8000/api";
-const WS_BASE = "ws://localhost:8000/ws";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+const WS_BASE = import.meta.env.VITE_WS_URL || "ws://localhost:8000/ws";
 
 const PERIODS = [
   { value: '1mo', label: '1M' },

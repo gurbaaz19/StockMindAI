@@ -13,3 +13,4 @@ python-dotenv
 duckduckgo-search
 beautifulsoup4
 requests
+psycopg2-binary
