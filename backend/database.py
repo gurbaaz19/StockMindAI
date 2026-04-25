@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, text
 from sqlalchemy.orm import declarative_base, sessionmaker
-from datetime import datetime
+from datetime import datetime, timezone
 
 DATABASE_URL = "sqlite:///./stockmind.db"
 
@@ -23,7 +23,7 @@ class Recommendation(Base):
     reasoning = Column(Text)
     model_name = Column(String, default="Unknown")
     current_price = Column(Float)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class Basket(Base):
@@ -33,7 +33,7 @@ class Basket(Base):
     name = Column(String, unique=True, index=True)
     tickers = Column(Text)  # Comma-separated tickers (legacy)
     data = Column(Text, default="[]")  # Full JSON payload
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 def _ensure_columns():

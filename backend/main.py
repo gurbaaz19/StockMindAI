@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends, BackgroundTasks, WebSocket, WebSocketDisconnect, Query, HTTPException
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from typing import List
 import asyncio
@@ -47,10 +47,16 @@ manager = ConnectionManager()
 main_loop = None
 
 
-def _rec_to_dict(rec: Recommendation) -> dict:
-    ts = rec.timestamp.isoformat() if rec.timestamp else datetime.utcnow().isoformat()
+def _format_utc_ts(dt: datetime | None) -> str:
+    if not dt:
+        dt = datetime.now(timezone.utc)
+    ts = dt.isoformat()
     if not ts.endswith('Z'):
         ts += 'Z'
+    return ts
+
+
+def _rec_to_dict(rec: Recommendation) -> dict:
     return {
         "id": rec.id,
         "ticker": rec.ticker,
@@ -63,7 +69,7 @@ def _rec_to_dict(rec: Recommendation) -> dict:
         "reasoning": rec.reasoning,
         "model_name": rec.model_name or "Unknown",
         "current_price": rec.current_price,
-        "timestamp": ts,
+        "timestamp": _format_utc_ts(rec.timestamp),
     }
 
 
@@ -99,7 +105,7 @@ def _build_recommendation(ticker: str) -> Recommendation:
         reasoning=analysis.get("reasoning", "No valid reason provided."),
         model_name=analysis.get("model_name", "Unknown"),
         current_price=prices.get("current_price", 0.0),
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
     )
 
 
@@ -197,7 +203,7 @@ def analyze_single_ticker(ticker: str = Query(...), background_tasks: Background
                 reasoning=analysis.get("reasoning", "No valid reason provided."),
                 model_name=analysis.get("model_name", "Unknown"),
                 current_price=prefetched_prices.get("current_price", 0.0),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
             )
             local_db.add(new_rec)
             local_db.commit()
@@ -249,7 +255,7 @@ def get_baskets(db: Session = Depends(get_db)):
                 id=b.id,
                 name=b.name,
                 items=items,
-                timestamp=b.timestamp
+                timestamp=_format_utc_ts(b.timestamp)
             )
         )
     return results
@@ -263,7 +269,8 @@ def create_basket(basket: BasketCreate, db: Session = Depends(get_db)):
     db_basket = Basket(
         name=basket.name,
         tickers=",".join([i.get("ticker", "").upper().strip() for i in basket.items]),
-        data=json.dumps(basket.items)
+        data=json.dumps(basket.items),
+        timestamp=datetime.now(timezone.utc)
     )
     db.add(db_basket)
     try:
@@ -277,7 +284,7 @@ def create_basket(basket: BasketCreate, db: Session = Depends(get_db)):
         id=db_basket.id,
         name=db_basket.name,
         items=basket.items,
-        timestamp=db_basket.timestamp
+        timestamp=_format_utc_ts(db_basket.timestamp)
     )
 
 
