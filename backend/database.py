@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, text
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, text, inspect
 from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime, timezone
 
@@ -50,26 +50,33 @@ class Basket(Base):
 
 def _ensure_columns():
     """Idempotently add new columns introduced after the initial schema."""
-    with engine.begin() as conn:
-        # recommendations table
-        existing_rec = {row[1] for row in conn.execute(text("PRAGMA table_info(recommendations)"))}
-        if "currency" not in existing_rec:
-            conn.execute(text("ALTER TABLE recommendations ADD COLUMN currency TEXT DEFAULT 'USD'"))
-        if "currency_symbol" not in existing_rec:
-            conn.execute(text("ALTER TABLE recommendations ADD COLUMN currency_symbol TEXT DEFAULT '$'"))
-        if "model_name" not in existing_rec:
-            conn.execute(text("ALTER TABLE recommendations ADD COLUMN model_name TEXT DEFAULT 'Unknown'"))
+    inspector = inspect(engine)
+    
+    # recommendations table
+    if "recommendations" in inspector.get_table_names():
+        columns = [c["name"] for c in inspector.get_columns("recommendations")]
+        with engine.begin() as conn:
+            if "currency" not in columns:
+                conn.execute(text("ALTER TABLE recommendations ADD COLUMN currency TEXT DEFAULT 'USD'"))
+            if "currency_symbol" not in columns:
+                conn.execute(text("ALTER TABLE recommendations ADD COLUMN currency_symbol TEXT DEFAULT '$'"))
+            if "model_name" not in columns:
+                conn.execute(text("ALTER TABLE recommendations ADD COLUMN model_name TEXT DEFAULT 'Unknown'"))
 
-        # baskets table
-        existing_basket = {row[1] for row in conn.execute(text("PRAGMA table_info(baskets)"))}
-        if "data" not in existing_basket:
-            conn.execute(text("ALTER TABLE baskets ADD COLUMN data TEXT DEFAULT '[]'"))
+    # baskets table
+    if "baskets" in inspector.get_table_names():
+        columns = [c["name"] for c in inspector.get_columns("baskets")]
+        with engine.begin() as conn:
+            if "data" not in columns:
+                conn.execute(text("ALTER TABLE baskets ADD COLUMN data TEXT DEFAULT '[]'"))
 
 
 def _purge_ghost_rows():
     """Remove rows where the price never resolved (legacy bad inserts)."""
-    with engine.begin() as conn:
-        conn.execute(text("DELETE FROM recommendations WHERE current_price IS NULL OR current_price <= 0"))
+    inspector = inspect(engine)
+    if "recommendations" in inspector.get_table_names():
+        with engine.begin() as conn:
+            conn.execute(text("DELETE FROM recommendations WHERE current_price IS NULL OR current_price <= 0"))
 
 
 def init_db():
