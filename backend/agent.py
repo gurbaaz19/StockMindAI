@@ -97,3 +97,38 @@ def run_agent(ticker: str) -> dict:
     except Exception as e:
         print(f"Error running agent for {ticker}: {e}")
         return {"action": "Hold", "confidence": 0.0, "reasoning": "Agent workflow failed."}
+
+def generate_basket(country: str) -> dict:
+    """Generates a high-quality stock/ETF basket for a specific country."""
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "You are an expert global equity analyst. The user wants a curated basket of top 3-5 high-quality stocks or ETFs specifically listed in {country} for a long term hold portfolio. "
+                   "Always use the correct yfinance ticker suffix for the local exchange (e.g. .NS for NSE India, .L for London, .DE for XETRA, .T for Tokyo, .HK for Hong Kong, .AX for ASX, .TO for TSX, .SA for B3 Brazil) so the symbol resolves on Yahoo Finance. "
+                   "Return a JSON with this exact schema: {{\"basket\": [{{\"ticker\": \"string\", \"name\": \"string\", \"currency\": \"3-letter ISO code matching the listing\", \"reasoning\": \"string detailing why this is a good hold\"}}]}}"),
+        ("user", "Country: {country}")
+    ])
+    
+    load_dotenv()
+    api_key_gemini = os.environ.get("GEMINI_API_KEY", "")
+    api_key_openai = os.environ.get("OPENAI_API_KEY", "")
+    
+    llm = None
+    if api_key_gemini:
+        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=api_key_gemini)
+    elif api_key_openai:
+         llm = ChatOpenAI(model="gpt-4", openai_api_key=api_key_openai)
+    else:
+        return {"basket": []}
+
+    chain = prompt | llm
+    try:
+        response = chain.invoke({"country": country})
+        content = response.content
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].strip()
+        data = json.loads(content)
+        return data
+    except Exception as e:
+        print(f"Error generating basket: {e}")
+        return {"basket": []}

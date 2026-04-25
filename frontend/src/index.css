@@ -267,3 +267,106 @@ body::after {
 }
 
 .modal-close:hover { opacity: 1; }
+
+/* History chart panel */
+.history-panel {
+  margin-top: 0.5rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+}
+
+.period-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.period-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.period-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.period-btn.active {
+  background: rgba(99, 102, 241, 0.3);
+  border-color: var(--primary);
+  color: white;
+}
+
+.chart-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 240px;
+}
+
+.chart-empty {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 2rem;
+  font-size: 0.9rem;
+}
+
+/* FX Converter */
+.fx-form {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+  align-items: center;
+}
+
+.fx-input,
+.fx-select {
+  padding: 0.75rem 1rem;
+  color: white;
+  border: 1px solid var(--glass-border);
+  outline: none;
+  font-size: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.fx-input { min-width: 140px; flex: 1; max-width: 200px; }
+.fx-select { min-width: 110px; }
+.fx-select option { background: var(--bg-dark); color: var(--text-primary); }
+
+.fx-swap {
+  padding: 0.75rem 1rem;
+  font-size: 1.1rem;
+}
+
+.fx-result {
+  padding: 1.25rem 1.5rem;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.fx-amount {
+  font-size: 1.4rem;
+  font-weight: 500;
+  color: white;
+  margin-bottom: 0.25rem;
+}
+
+.fx-rate {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+/* Recharts text default override for dark theme */
+.recharts-cartesian-axis-tick-value tspan { fill: #94a3b8; }
