@@ -12,6 +12,7 @@ class RecommendationCreate(BaseModel):
     action: str
     confidence: float
     reasoning: str
+    model_name: str = "Unknown"
     current_price: float
 
 
@@ -25,6 +26,7 @@ class RecommendationResponse(BaseModel):
     action: str
     confidence: float
     reasoning: str
+    model_name: str = "Unknown"
     current_price: float
     timestamp: datetime
 

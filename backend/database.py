@@ -21,6 +21,7 @@ class Recommendation(Base):
     action = Column(String)
     confidence = Column(Float)
     reasoning = Column(Text)
+    model_name = Column(String, default="Unknown")
     current_price = Column(Float)
     timestamp = Column(DateTime, default=datetime.utcnow)
 
@@ -44,6 +45,8 @@ def _ensure_columns():
             conn.execute(text("ALTER TABLE recommendations ADD COLUMN currency TEXT DEFAULT 'USD'"))
         if "currency_symbol" not in existing_rec:
             conn.execute(text("ALTER TABLE recommendations ADD COLUMN currency_symbol TEXT DEFAULT '$'"))
+        if "model_name" not in existing_rec:
+            conn.execute(text("ALTER TABLE recommendations ADD COLUMN model_name TEXT DEFAULT 'Unknown'"))
 
         # baskets table
         existing_basket = {row[1] for row in conn.execute(text("PRAGMA table_info(baskets)"))}

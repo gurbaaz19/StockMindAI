@@ -382,18 +382,38 @@ def get_exchange_rate(base: str, quote: str, period: str = "1mo") -> dict:
         }
     if period not in VALID_PERIODS:
         return {"error": f"Invalid period '{period}'."}
-    try:
-        symbol = f"{base}{quote}=X"
+
+    def _fetch_yf(b, q):
+        symbol = f"{b}{q}=X"
         stock = yf.Ticker(symbol)
         hist = stock.history(period=period)
+        return symbol, hist
+
+    try:
+        symbol, hist = _fetch_yf(base, quote)
+        inverted = False
+        
+        # If no data, try the inverse (e.g. USDPKR instead of PKRUSD)
         if hist.empty:
-            return {"error": f"No FX data for {symbol}.", "base": base, "quote": quote}
+            symbol, hist = _fetch_yf(quote, base)
+            inverted = True
+            
+        if hist.empty:
+            return {"error": f"No FX data for {base}/{quote}.", "base": base, "quote": quote}
+            
         rate = _safe_float(hist["Close"].iloc[-1])
-        history = [
-            {"date": idx.strftime("%Y-%m-%d"), "close": _safe_float(row["Close"])}
-            for idx, row in hist.iterrows()
-            if _safe_float(row["Close"]) is not None
-        ]
+        if inverted and rate:
+            rate = 1.0 / rate
+            
+        history = []
+        for idx, row in hist.iterrows():
+            close = _safe_float(row["Close"])
+            if close is not None and close > 0:
+                history.append({
+                    "date": idx.strftime("%Y-%m-%d"),
+                    "close": 1.0 / close if inverted else close
+                })
+                
         return {
             "base": base,
             "quote": quote,
@@ -401,6 +421,7 @@ def get_exchange_rate(base: str, quote: str, period: str = "1mo") -> dict:
             "rate": rate,
             "period": period,
             "history": history,
+            "inverted": inverted
         }
     except Exception as e:
         return {"error": str(e), "base": base, "quote": quote}
@@ -426,7 +447,6 @@ def search_tickers(query: str, limit: int = 10) -> list[dict]:
             "quotesCount": max(1, min(limit, 25)),
             "newsCount": 0,
             "lang": "en-US",
-            "region": "US",
         }
         r = requests.get(_YF_SEARCH_URL, params=params, headers=_YF_HEADERS, timeout=5)
         r.raise_for_status()
