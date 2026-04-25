@@ -19,10 +19,17 @@ load_dotenv()
 app = FastAPI(title="StockMind AI Recommendation API")
 
 from fastapi.middleware.cors import CORSMiddleware
-frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+frontend_url = os.getenv("FRONTEND_URL", "https://stock-mind-ai.vercel.app")
+# Robust CORS: allow localhost, the specific frontend URL, and variations with/without trailing slashes
+origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    frontend_url.rstrip("/"),
+    frontend_url.rstrip("/") + "/",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_url],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
