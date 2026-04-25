@@ -1,5 +1,6 @@
 import re
 import math
+import requests
 import yfinance as yf
 from duckduckgo_search import DDGS
 
@@ -14,7 +15,29 @@ CURRENCY_SYMBOL = {
     "MXN": "Mex$", "ZAR": "R", "ILS": "₪", "SAR": "﷼", "AED": "د.إ",
     "SEK": "kr", "NOK": "kr", "DKK": "kr", "PLN": "zł", "CZK": "Kč",
     "HUF": "Ft", "TRY": "₺", "RUB": "₽", "THB": "฿", "IDR": "Rp",
-    "MYR": "RM", "PHP": "₱", "VND": "₫",
+    "MYR": "RM", "PHP": "₱", "VND": "₫", "PKR": "₨", "BDT": "৳",
+    "LKR": "₨", "UAH": "₴", "RON": "lei", "BGN": "лв", "NGN": "₦",
+    "KES": "KSh", "GHS": "₵", "KZT": "₸", "MAD": "dh", "QAR": "﷼",
+    "KWD": "د.ك", "OMR": "﷼", "BHD": ".د.ب", "EGP": "E£", "ISK": "kr",
+    "ARS": "$", "CLP": "$", "COP": "$", "PEN": "S/.", "DZD": "DA",
+    "AOA": "Kz", "AMD": "֏", "AZN": "₼", "BAM": "KM", "BBD": "$",
+    "BIF": "FBu", "BMD": "$", "BND": "$", "BOB": "Bs.", "BSD": "$",
+    "BTN": "Nu.", "BWP": "P", "BYN": "Br", "BZD": "$", "CDF": "FC",
+    "CRC": "₡", "CUP": "$", "CVE": "$", "DJF": "Fdj", "DOP": "$",
+    "ERN": "Nfk", "ETB": "Br", "FJD": "$", "GEL": "₾", "GIP": "£",
+    "GMD": "D", "GNF": "FG", "GTQ": "Q", "GYD": "$", "HNL": "L",
+    "HTG": "G", "IQD": "ع.د", "IRR": "﷼", "JMD": "$", "JOD": "د.ا",
+    "KGS": "с", "KHR": "៛", "KMF": "CF", "KPW": "₩", "KYD": "$",
+    "LAK": "₭", "LBP": "ل.ل", "LRD": "$", "LSL": "L", "LYD": "ل.د",
+    "MDL": "L", "MGA": "Ar", "MKD": "ден", "MMK": "K", "MNT": "₮",
+    "MOP": "P", "MRU": "UM", "MUR": "₨", "MVR": "Rf", "MWK": "MK",
+    "MZN": "MT", "NAD": "$", "NIO": "C$", "NPR": "₨", "PAB": "B/.",
+    "PGK": "K", "PYG": "₲", "RWF": "FRw", "SBD": "$", "SCR": "₨",
+    "SDG": "ج.س.", "SHP": "£", "SLL": "Le", "SOS": "Sh", "SRD": "$",
+    "SSP": "£", "STN": "Db", "SYP": "£", "SZL": "L", "TJS": "ЅМ",
+    "TMT": "m", "TND": "د.ت", "TOP": "T$", "TTD": "$", "TZS": "Sh",
+    "UGX": "Sh", "UYU": "$", "UZS": "so'm", "VES": "Bs.S", "VUV": "Vt",
+    "WST": "T", "YER": "﷼", "ZMW": "ZK", "ZWL": "$",
 }
 
 COUNTRY_FLAG = {
@@ -53,6 +76,24 @@ COUNTRY_FLAG = {
     "MY": "🇲🇾", "Malaysia": "🇲🇾",
     "PH": "🇵🇭", "Philippines": "🇵🇭",
     "VN": "🇻🇳", "Vietnam": "🇻🇳",
+    "DZ": "🇩🇿", "AO": "🇦🇴", "AM": "🇦🇲", "AZ": "🇦🇿", "BA": "🇧🇦",
+    "BB": "🇧🇧", "BI": "🇧🇮", "BM": "🇧🇲", "BN": "🇧🇳", "BO": "🇧🇴",
+    "BS": "🇧🇸", "BT": "🇧🇹", "BW": "🇧🇼", "BY": "🇧🇾", "BZ": "🇧🇿",
+    "CD": "🇨🇩", "CR": "🇨🇷", "CU": "🇨🇺", "CV": "🇨🇻", "DJ": "🇩🇯",
+    "DO": "🇩🇴", "ER": "🇪🇷", "ET": "🇪🇹", "FJ": "🇫🇯", "GE": "🇬🇪",
+    "GI": "🇬🇮", "GM": "🇬🇲", "GN": "🇬🇳", "GT": "🇬🇹", "GY": "🇬🇾",
+    "HN": "🇭🇳", "HT": "🇭🇹", "IQ": "🇮🇶", "IR": "🇮🇷", "JM": "🇯🇲",
+    "JO": "🇯🇴", "KG": "🇰🇬", "KH": "🇰🇭", "KM": "🇰🇲", "KP": "🇰🇵",
+    "KY": "🇰🇾", "LA": "🇱🇦", "LB": "🇱🇧", "LR": "🇱🇷", "LS": "🇱🇸",
+    "LY": "🇱🇾", "MD": "🇲🇩", "MG": "🇲🇬", "MK": "🇲🇰", "MM": "🇲🇲",
+    "MN": "🇲🇳", "MO": "🇲🇴", "MR": "🇲🇷", "MU": "🇲🇺", "MV": "🇲🇻",
+    "MW": "🇲🇼", "MZ": "🇲🇿", "NA": "🇳🇦", "NI": "🇳🇮", "NP": "🇳🇵",
+    "PA": "🇵🇦", "PG": "🇵🇬", "PY": "🇵🇾", "RW": "🇷🇼", "SB": "🇸🇧",
+    "SC": "🇸🇨", "SD": "🇸🇩", "SH": "🇸🇭", "SL": "🇸🇱", "SO": "🇸🇴",
+    "SR": "🇸🇷", "SS": "🇸🇸", "ST": "🇸🇹", "SY": "🇸🇾", "SZ": "🇸🇿",
+    "TJ": "🇹🇯", "TM": "🇹🇲", "TN": "🇹🇳", "TO": "🇹🇴", "TT": "🇹🇹",
+    "TZ": "🇹🇿", "UG": "🇺🇬", "UY": "🇺🇾", "UZ": "🇺🇿", "VE": "🇻🇪",
+    "VU": "🇻🇺", "WS": "🇼🇸", "YE": "🇾🇪", "ZM": "🇿🇲", "ZW": "🇿🇼",
 }
 
 # Suffix -> (country_code, currency, exchange_label)
@@ -197,8 +238,38 @@ def _safe_float(v):
         return None
 
 
+def _valuation_verdict(current_price, target_mean, target_low, target_high):
+    """Derive a simple over/under/fair valuation tag from analyst targets.
+
+    Uses the analyst consensus (`targetMeanPrice`) as a proxy for intrinsic value:
+      price < 90% of target  → Undervalued
+      price > 110% of target → Overvalued
+      otherwise              → Fairly Valued
+    Falls back to the high/low band when the mean is unavailable.
+    """
+    if current_price is None or current_price <= 0:
+        return {"verdict": "Unknown", "confidence": 0.0, "upside_pct": None}
+    target = _safe_float(target_mean)
+    if target and target > 0:
+        upside = (target - current_price) / current_price
+        if upside < -0.10:
+            label = "Overvalued"
+        elif upside > 0.10:
+            label = "Undervalued"
+        else:
+            label = "Fairly Valued"
+        # Confidence proxied by how tight the analyst range is
+        lo, hi = _safe_float(target_low), _safe_float(target_high)
+        spread_conf = 0.5
+        if lo and hi and hi > lo:
+            spread = (hi - lo) / target
+            spread_conf = max(0.1, min(0.95, 1 - spread))
+        return {"verdict": label, "confidence": round(spread_conf, 2), "upside_pct": round(upside * 100, 2)}
+    return {"verdict": "Unknown", "confidence": 0.0, "upside_pct": None}
+
+
 def get_stock_data(ticker: str) -> dict:
-    """Fetch basic stock info, market metadata, and recent price history."""
+    """Fetch basic stock info, market metadata, recent price history, and valuation."""
     try:
         stock = yf.Ticker(ticker)
         hist = stock.history(period="1mo")
@@ -219,14 +290,38 @@ def get_stock_data(ticker: str) -> dict:
             if _safe_float(row["Close"]) is not None
         ]
 
+        target_mean = info.get("targetMeanPrice")
+        target_high = info.get("targetHighPrice")
+        target_low = info.get("targetLowPrice")
+        valuation = _valuation_verdict(current_price, target_mean, target_low, target_high)
+
         return {
             "current_price": current_price,
             "historical_prices": history,
-            "market_cap": info.get("marketCap"),
-            "pe_ratio": info.get("trailingPE", "N/A"),
-            "fifty_two_week_high": info.get("fiftyTwoWeekHigh"),
-            "fifty_two_week_low": info.get("fiftyTwoWeekLow"),
-            "dividend_yield": info.get("dividendYield", 0),
+            "market_cap": _safe_float(info.get("marketCap")),
+            "pe_ratio": _safe_float(info.get("trailingPE")),
+            "forward_pe": _safe_float(info.get("forwardPE")),
+            "peg_ratio": _safe_float(info.get("pegRatio") or info.get("trailingPegRatio")),
+            "price_to_book": _safe_float(info.get("priceToBook")),
+            "price_to_sales": _safe_float(info.get("priceToSalesTrailing12Months")),
+            "fifty_two_week_high": _safe_float(info.get("fiftyTwoWeekHigh")),
+            "fifty_two_week_low": _safe_float(info.get("fiftyTwoWeekLow")),
+            "dividend_yield": _safe_float(info.get("dividendYield")) or 0,
+            "beta": _safe_float(info.get("beta")),
+            # Valuation / "intrinsic value" proxy
+            "target_mean_price": _safe_float(target_mean),
+            "target_high_price": _safe_float(target_high),
+            "target_low_price": _safe_float(target_low),
+            "analyst_recommendation_mean": _safe_float(info.get("recommendationMean")),
+            "analyst_recommendation_key": info.get("recommendationKey"),
+            "number_of_analyst_opinions": _safe_float(info.get("numberOfAnalystOpinions")),
+            "valuation_verdict": valuation["verdict"],
+            "valuation_upside_pct": valuation["upside_pct"],
+            "valuation_confidence": valuation["confidence"],
+            # Identity
+            "long_name": info.get("longName") or info.get("shortName"),
+            "sector": info.get("sector"),
+            "industry": info.get("industry"),
             "market_name": market["exchange"],
             **market,
         }
@@ -309,6 +404,61 @@ def get_exchange_rate(base: str, quote: str, period: str = "1mo") -> dict:
         }
     except Exception as e:
         return {"error": str(e), "base": base, "quote": quote}
+
+
+_YF_SEARCH_URL = "https://query1.finance.yahoo.com/v1/finance/search"
+_YF_HEADERS = {"User-Agent": "Mozilla/5.0 (StockMind/1.0)"}
+
+
+def search_tickers(query: str, limit: int = 10) -> list[dict]:
+    """Fuzzy ticker search via Yahoo Finance's public autocomplete.
+
+    Returns a list of suggestions, each enriched with country/currency/flag
+    derived by the same suffix resolver used elsewhere — so the dropdown
+    can render `🇮🇳 HDFCBANK.NS  HDFC Bank Limited  NSE  INR` for typing "hdfc".
+    """
+    q = (query or "").strip()
+    if not q:
+        return []
+    try:
+        params = {
+            "q": q,
+            "quotesCount": max(1, min(limit, 25)),
+            "newsCount": 0,
+            "lang": "en-US",
+            "region": "US",
+        }
+        r = requests.get(_YF_SEARCH_URL, params=params, headers=_YF_HEADERS, timeout=5)
+        r.raise_for_status()
+        data = r.json() or {}
+    except Exception as e:
+        print(f"search_tickers error: {e}")
+        return []
+
+    out = []
+    for quote in data.get("quotes", []):
+        sym = quote.get("symbol")
+        if not sym:
+            continue
+        info = {
+            "currency": quote.get("currency"),
+            "country": quote.get("region"),
+            "exchange": quote.get("exchDisp") or quote.get("exchange"),
+        }
+        market = resolve_market(sym, info)
+        out.append({
+            "ticker": sym,
+            "name": quote.get("longname") or quote.get("shortname") or sym,
+            "type": quote.get("quoteType", "EQUITY"),
+            "exchange": quote.get("exchDisp") or market["exchange"],
+            "country": market["country"],
+            "country_flag": market["country_flag"],
+            "currency": market["currency"],
+            "currency_symbol": market["currency_symbol"],
+        })
+        if len(out) >= limit:
+            break
+    return out
 
 
 def get_stock_news(ticker: str) -> list:

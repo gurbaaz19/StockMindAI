@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -26,6 +26,21 @@ class RecommendationResponse(BaseModel):
     confidence: float
     reasoning: str
     current_price: float
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class BasketCreate(BaseModel):
+    name: str
+    items: List[dict]
+
+
+class BasketResponse(BaseModel):
+    id: int
+    name: str
+    items: List[dict]
     timestamp: datetime
 
     class Config:

@@ -370,3 +370,215 @@ body::after {
 
 /* Recharts text default override for dark theme */
 .recharts-cartesian-axis-tick-value tspan { fill: #94a3b8; }
+
+/* Delete Button */
+.delete-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.5rem;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+.delete-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--danger);
+}
+
+/* Combobox */
+.combobox {
+  position: relative;
+}
+.combobox-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--glass-border);
+  color: white;
+  font-size: 1rem;
+  outline: none;
+}
+.combobox-input:focus {
+  border-color: var(--primary);
+}
+.combobox-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 0.5rem;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+.combobox-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: none;
+  color: white;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.combobox-item:hover, .combobox-item.active {
+  background: rgba(255, 255, 255, 0.1);
+}
+.combobox-flag {
+  font-size: 1.5rem;
+}
+.combobox-main {
+  flex: 1;
+}
+.combobox-ticker {
+  font-weight: 600;
+}
+.combobox-name {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.combobox-meta {
+  text-align: right;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+}
+.combobox-empty {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  animation: slideIn 0.3s ease forwards;
+}
+.toast-info { border-left: 4px solid var(--primary); }
+.toast-success { border-left: 4px solid var(--success); }
+.toast-error { border-left: 4px solid var(--danger); }
+.toast-close {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 1.2rem;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.toast-close:hover { opacity: 1; }
+
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Valuation Panel */
+.valuation-panel {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  padding: 1.5rem;
+}
+.valuation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--glass-border);
+}
+.valuation-header h4 {
+  margin: 0;
+  color: var(--primary);
+}
+.valuation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+.val-cell {
+  display: flex;
+  flex-direction: column;
+}
+.val-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.25rem;
+}
+.val-value {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: white;
+}
+.val-sub {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+}
+.val-meta {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--glass-border);
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+/* Saved Baskets */
+.saved-basket-card {
+  border-left: 4px solid var(--primary);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+}
+
+.basket-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.basket-item-mini {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.ticker-mini {
+  font-weight: 600;
+  color: var(--primary);
+  min-width: 80px;
+}
+
+.weight-mini {
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--success);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.name-mini {
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}

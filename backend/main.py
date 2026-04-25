@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, BackgroundTasks, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, Depends, BackgroundTasks, WebSocket, WebSocketDisconnect, Query, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -6,10 +6,10 @@ from typing import List
 import asyncio
 import threading
 
-from database import init_db, get_db, Recommendation
-from schemas import RecommendationResponse
+from database import init_db, get_db, Recommendation, Basket
+from schemas import RecommendationResponse, BasketCreate, BasketResponse
 from agent import run_agent, generate_basket
-from utils import get_stock_data, get_price_history, get_exchange_rate
+from utils import get_stock_data, get_price_history, get_exchange_rate, search_tickers
 
 app = FastAPI(title="StockMind AI Recommendation API")
 
@@ -72,9 +72,18 @@ def broadcast_recommendation(rec: Recommendation):
         )
 
 
+def _has_valid_data(prices: dict) -> bool:
+    if not prices or prices.get("error"):
+        return False
+    price = prices.get("current_price")
+    return price is not None and price > 0
+
+
 def _build_recommendation(ticker: str) -> Recommendation:
-    analysis = run_agent(ticker)
     prices = get_stock_data(ticker)
+    if not _has_valid_data(prices):
+        raise ValueError(f"No asset data found for '{ticker}'")
+    analysis = run_agent(ticker)
     return Recommendation(
         ticker=ticker,
         market_name=prices.get("market_name", prices.get("exchange", "Unknown")),
@@ -104,8 +113,11 @@ def background_analysis_job():
                 db.commit()
                 db.refresh(new_rec)
                 broadcast_recommendation(new_rec)
+            except ValueError as e:
+                print(f"[watchlist] skipping {ticker}: {e}")
+                db.rollback()
             except Exception as e:
-                print(f"Error processing {ticker}: {e}")
+                print(f"[watchlist] error processing {ticker}: {e}")
                 db.rollback()
     finally:
         db.close()
@@ -148,42 +160,173 @@ def get_recommendations(db: Session = Depends(get_db)):
             .order_by(Recommendation.timestamp.desc())
             .first()
         )
-        if rec:
+        if rec and (rec.current_price or 0) > 0:
             latest_recs.append(rec)
     return latest_recs
 
 
 @app.post("/api/analyze/{ticker}")
 def analyze_single_ticker(ticker: str, background_tasks: BackgroundTasks):
-    def process():
+    """Validate the ticker has data first, then queue the LLM analysis.
+
+    Returns 404 if Yahoo Finance has no usable data for the symbol so the
+    UI can show 'No asset found' instead of inserting a ghost row.
+    """
+    sym = ticker.upper().strip()
+    prices = get_stock_data(sym)
+    if not _has_valid_data(prices):
+        raise HTTPException(
+            status_code=404,
+            detail=f"No asset found for '{sym}'. Try the search dropdown for the correct symbol (e.g. RELIANCE.NS, BARC.L).",
+        )
+
+    def process(prefetched_prices: dict):
         from database import SessionLocal
         local_db = SessionLocal()
         try:
-            new_rec = _build_recommendation(ticker.upper())
+            analysis = run_agent(sym)
+            new_rec = Recommendation(
+                ticker=sym,
+                market_name=prefetched_prices.get("market_name", "Unknown"),
+                country_flag=prefetched_prices.get("country_flag", "🌐"),
+                currency=prefetched_prices.get("currency", "USD"),
+                currency_symbol=prefetched_prices.get("currency_symbol", "$"),
+                action=analysis.get("action", "Hold"),
+                confidence=analysis.get("confidence", 0.0),
+                reasoning=analysis.get("reasoning", "No valid reason provided."),
+                current_price=prefetched_prices.get("current_price", 0.0),
+                timestamp=datetime.utcnow(),
+            )
             local_db.add(new_rec)
             local_db.commit()
             local_db.refresh(new_rec)
             broadcast_recommendation(new_rec)
         except Exception as e:
-            print(f"Error analyzing {ticker}: {e}")
+            print(f"Error analyzing {sym}: {e}")
             local_db.rollback()
         finally:
             local_db.close()
 
-    background_tasks.add_task(process)
-    return {"message": f"Analysis started for {ticker}"}
+    background_tasks.add_task(process, prices)
+    return {
+        "message": f"Analysis started for {sym}",
+        "ticker": sym,
+        "market_name": prices.get("market_name"),
+        "country_flag": prices.get("country_flag"),
+        "currency": prices.get("currency"),
+        "currency_symbol": prices.get("currency_symbol"),
+        "current_price": prices.get("current_price"),
+    }
 
 
 @app.get("/api/basket/{country}")
-def get_basket(country: str):
-    return generate_basket(country)
+def get_basket(country: str, risk: str = Query("Medium")):
+    return generate_basket(country, risk_tolerance=risk)
+
+
+@app.get("/api/baskets", response_model=List[BasketResponse])
+def get_baskets(db: Session = Depends(get_db)):
+    import json
+    baskets = db.query(Basket).all()
+    results = []
+    for b in baskets:
+        try:
+            items = json.loads(b.data) if b.data else []
+            if not isinstance(items, list):
+                items = []
+        except:
+            items = []
+        
+        # Fallback to tickers if data is empty (legacy)
+        if not items and b.tickers:
+            items = [{"ticker": t.strip()} for t in b.tickers.split(",") if t.strip()]
+        
+        results.append(
+            BasketResponse(
+                id=b.id,
+                name=b.name,
+                items=items,
+                timestamp=b.timestamp
+            )
+        )
+    return results
+
+
+@app.post("/api/baskets", response_model=BasketResponse)
+def create_basket(basket: BasketCreate, db: Session = Depends(get_db)):
+    import json
+    db_basket = Basket(
+        name=basket.name,
+        tickers=",".join([i.get("ticker", "").upper().strip() for i in basket.items]),
+        data=json.dumps(basket.items)
+    )
+    db.add(db_basket)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Basket name might already exist.")
+    db.refresh(db_basket)
+    return BasketResponse(
+        id=db_basket.id,
+        name=db_basket.name,
+        items=basket.items,
+        timestamp=db_basket.timestamp
+    )
+
+
+@app.delete("/api/baskets/{name}")
+def delete_basket(name: str, db: Session = Depends(get_db)):
+    deleted = db.query(Basket).filter(Basket.name == name).delete()
+    db.commit()
+    if deleted == 0:
+        raise HTTPException(status_code=404, detail=f"Basket '{name}' not found")
+    return {"deleted": deleted, "name": name}
 
 
 @app.get("/api/history/{ticker}")
 def history(ticker: str, period: str = Query("1mo"), interval: str = Query("1d")):
-    return get_price_history(ticker.upper(), period=period, interval=interval)
+    data = get_price_history(ticker.upper(), period=period, interval=interval)
+    if data.get("error") and not data.get("history"):
+        raise HTTPException(status_code=404, detail=data["error"])
+    return data
 
 
 @app.get("/api/forex/{base}/{quote}")
 def forex(base: str, quote: str, period: str = Query("1mo")):
-    return get_exchange_rate(base, quote, period=period)
+    data = get_exchange_rate(base, quote, period=period)
+    if data.get("error"):
+        raise HTTPException(status_code=400, detail=data["error"])
+    return data
+
+
+@app.get("/api/search")
+def search(q: str = Query(..., min_length=1, max_length=64), limit: int = Query(10, ge=1, le=20)):
+    return {"query": q, "results": search_tickers(q, limit=limit)}
+
+
+@app.get("/api/asset")
+def asset(ticker: str = Query(...)):
+    """Full snapshot incl. valuation fields (target price, P/B, verdict, etc)."""
+    sym = ticker.upper().strip()
+    data = get_stock_data(sym)
+    if not _has_valid_data(data):
+        # Return 200 with error instead of 404 to allow UI to handle it gracefully
+        return {"ticker": sym, "error": f"No data found for {sym}"}
+    return {"ticker": sym, **data}
+
+
+@app.delete("/api/recommendations/{ticker}")
+def delete_recommendation(ticker: str, db: Session = Depends(get_db)):
+    """Delete every stored recommendation for a ticker."""
+    sym = ticker.upper().strip()
+    deleted = db.query(Recommendation).filter(Recommendation.ticker == sym).delete()
+    db.commit()
+    if deleted == 0:
+        raise HTTPException(status_code=404, detail=f"No entries for '{sym}'")
+    if main_loop and main_loop.is_running():
+        asyncio.run_coroutine_threadsafe(
+            manager.broadcast({"type": "delete_recommendation", "data": {"ticker": sym}}),
+            main_loop,
+        )
+    return {"deleted": deleted, "ticker": sym}
