@@ -48,6 +48,9 @@ main_loop = None
 
 
 def _rec_to_dict(rec: Recommendation) -> dict:
+    ts = rec.timestamp.isoformat() if rec.timestamp else datetime.utcnow().isoformat()
+    if not ts.endswith('Z'):
+        ts += 'Z'
     return {
         "id": rec.id,
         "ticker": rec.ticker,
@@ -58,8 +61,9 @@ def _rec_to_dict(rec: Recommendation) -> dict:
         "action": rec.action,
         "confidence": rec.confidence,
         "reasoning": rec.reasoning,
+        "model_name": rec.model_name or "Unknown",
         "current_price": rec.current_price,
-        "timestamp": rec.timestamp.isoformat() if rec.timestamp else str(datetime.utcnow()),
+        "timestamp": ts,
     }
 
 
@@ -93,6 +97,7 @@ def _build_recommendation(ticker: str) -> Recommendation:
         action=analysis.get("action", "Hold"),
         confidence=analysis.get("confidence", 0.0),
         reasoning=analysis.get("reasoning", "No valid reason provided."),
+        model_name=analysis.get("model_name", "Unknown"),
         current_price=prices.get("current_price", 0.0),
         timestamp=datetime.utcnow(),
     )
@@ -165,13 +170,9 @@ def get_recommendations(db: Session = Depends(get_db)):
     return latest_recs
 
 
-@app.post("/api/analyze/{ticker}")
-def analyze_single_ticker(ticker: str, background_tasks: BackgroundTasks):
-    """Validate the ticker has data first, then queue the LLM analysis.
-
-    Returns 404 if Yahoo Finance has no usable data for the symbol so the
-    UI can show 'No asset found' instead of inserting a ghost row.
-    """
+@app.post("/api/analyze")
+def analyze_single_ticker(ticker: str = Query(...), background_tasks: BackgroundTasks = None):
+    """Validate the ticker has data first, then queue the LLM analysis."""
     sym = ticker.upper().strip()
     prices = get_stock_data(sym)
     if not _has_valid_data(prices):
@@ -194,6 +195,7 @@ def analyze_single_ticker(ticker: str, background_tasks: BackgroundTasks):
                 action=analysis.get("action", "Hold"),
                 confidence=analysis.get("confidence", 0.0),
                 reasoning=analysis.get("reasoning", "No valid reason provided."),
+                model_name=analysis.get("model_name", "Unknown"),
                 current_price=prefetched_prices.get("current_price", 0.0),
                 timestamp=datetime.utcnow(),
             )
@@ -225,6 +227,7 @@ def get_basket(country: str, risk: str = Query("Medium")):
 
 
 @app.get("/api/baskets", response_model=List[BasketResponse])
+@app.get("/api/baskets/", response_model=List[BasketResponse], include_in_schema=False)
 def get_baskets(db: Session = Depends(get_db)):
     import json
     baskets = db.query(Basket).all()
@@ -253,8 +256,10 @@ def get_baskets(db: Session = Depends(get_db)):
 
 
 @app.post("/api/baskets", response_model=BasketResponse)
+@app.post("/api/baskets/", response_model=BasketResponse, include_in_schema=False)
 def create_basket(basket: BasketCreate, db: Session = Depends(get_db)):
     import json
+    print(f"[API] Saving basket: {basket.name} with {len(basket.items)} items")
     db_basket = Basket(
         name=basket.name,
         tickers=",".join([i.get("ticker", "").upper().strip() for i in basket.items]),
@@ -263,9 +268,10 @@ def create_basket(basket: BasketCreate, db: Session = Depends(get_db)):
     db.add(db_basket)
     try:
         db.commit()
-    except Exception:
+    except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Basket name might already exist.")
+        print(f"[API] Error saving basket: {e}")
+        raise HTTPException(status_code=400, detail="Basket name might already exist or data is malformed.")
     db.refresh(db_basket)
     return BasketResponse(
         id=db_basket.id,
@@ -276,6 +282,7 @@ def create_basket(basket: BasketCreate, db: Session = Depends(get_db)):
 
 
 @app.delete("/api/baskets/{name}")
+@app.delete("/api/baskets/{name}/", include_in_schema=False)
 def delete_basket(name: str, db: Session = Depends(get_db)):
     deleted = db.query(Basket).filter(Basket.name == name).delete()
     db.commit()

@@ -346,7 +346,10 @@ function CountrySearch({ value, onChange, onSubmit, disabled }) {
   const wrapRef = useRef(null);
   useClickOutside(wrapRef, () => setOpen(false));
 
-  useEffect(() => { setQuery(value || ''); }, [value]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setQuery(value || '');
+  }, [value]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -418,7 +421,10 @@ function CurrencySearch({ value, onChange, placeholder = 'Select…', disabled }
   useClickOutside(wrapRef, () => setOpen(false));
 
   const selected = useMemo(() => CURRENCIES.find(c => c.code === value), [value]);
-  useEffect(() => { setQuery(selected ? `${selected.flag} ${selected.code}` : ''); }, [selected]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setQuery(selected ? `${selected.flag} ${selected.code}` : '');
+  }, [selected]);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase().replace(/[^\w]/g, '');
@@ -506,6 +512,7 @@ function ValuationPanel({ ticker, currency, symbol }) {
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true); setErr(null);
     fetch(`${API_BASE}/asset?ticker=${encodeURIComponent(ticker)}`)
       .then(async r => {
@@ -520,9 +527,12 @@ function ValuationPanel({ ticker, currency, symbol }) {
     return () => { cancelled = true; };
   }, [ticker]);
 
-  if (loading) return <div className="valuation-panel"><div className="loader" style={{ width: 24, height: 24 }} /></div>;
-  if (err) return <div className="valuation-panel"><div className="chart-empty">Could not load valuation: {err}</div></div>;
-  if (!data) return null;
+  if (loading) return <div className="valuation-panel"><div className="loader" style={{ width: 24, height: 24, margin: '0 auto' }} /></div>;
+  if (err) {
+    console.warn(`[UI] Valuation error for ${ticker}:`, err);
+    return <div className="valuation-panel"><div className="chart-empty">No detailed valuation available for this asset type.</div></div>;
+  }
+  if (!data || data.error) return <div className="valuation-panel"><div className="chart-empty">Valuation snapshot unavailable.</div></div>;
 
   const verdictClass = (v) => {
     if (!v) return 'hold';
@@ -633,6 +643,7 @@ function HistoryPanel({ ticker, currency, symbol }) {
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true); setErr(null);
     fetch(`${API_BASE}/history/${encodeURIComponent(ticker)}?period=${period}`)
       .then(async r => {
@@ -830,7 +841,7 @@ function App() {
     if (!ticker) return;
     setAnalyzing(true);
     try {
-      const res = await fetch(`${API_BASE}/analyze/${encodeURIComponent(ticker)}`, { method: 'POST' });
+      const res = await fetch(`${API_BASE}/analyze?ticker=${encodeURIComponent(ticker)}`, { method: 'POST' });
       const data = await res.json().catch(() => ({}));
       if (res.status === 404) {
         setToast({ kind: 'error', text: data.detail || `No asset found for ${ticker}` });
@@ -846,7 +857,53 @@ function App() {
     }
   };
 
+  const handleOpenModal = (item) => {
+    const ticker = (item.ticker || '').toUpperCase();
+    const existing = recommendations.find(r => r.ticker === ticker);
+    if (existing) {
+      setSelectedRec(existing);
+    } else {
+      // Mock a recommendation object to open the modal immediately
+      // The internal panels (Valuation/History) will fetch data using the ticker.
+      setSelectedRec({
+        ticker,
+        market_name: item.name || 'Stock/MF',
+        country_flag: '🌐',
+        currency: item.currency || 'INR',
+        currency_symbol: '₹',
+        current_price: 0,
+        action: 'Analyzing...',
+        confidence: 0,
+        reasoning: item.reasoning || 'Requesting full analysis...',
+        model_name: 'AI Agent',
+        timestamp: new Date().toISOString()
+      });
+      // Also trigger a real analysis to populate the live dashboard
+      handleAnalyze(item);
+    }
+  };
+
   const handleRefresh = async () => { setRefreshing(true); await fetchRecommendations(); };
+
+  const handleAnalyzeAll = async () => {
+    if (recommendations.length === 0) return;
+    setRefreshing(true);
+    setToast({ kind: 'info', text: `Batch analysis started for ${recommendations.length} assets...` });
+    
+    // Fire all analysis requests in parallel
+    const promises = recommendations.map(rec => 
+      fetch(`${API_BASE}/analyze?ticker=${encodeURIComponent(rec.ticker)}`, { method: 'POST' })
+    );
+    
+    try {
+      await Promise.all(promises);
+    } catch (err) {
+      console.error("Batch analysis error:", err);
+      setToast({ kind: 'error', text: `Batch analysis failed: ${err.message || err}` });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const handleGenerateBasket = async (e, marketOverride = null) => {
     if (e) e.preventDefault();
@@ -859,9 +916,11 @@ function App() {
       if (!res.ok) throw new Error(data.detail || data.error || `HTTP ${res.status}`);
       
       let basketArr = data.basket || [];
+      console.log(`[UI] Basket received for ${market}:`, basketArr);
       // Ensure percentage weights exist, fallback to even split
       const total = basketArr.reduce((sum, item) => sum + (item.percentage_weight || 0), 0);
       if (total === 0 || total < 90 || total > 110) {
+        console.warn("[UI] Invalid or missing percentage weights. Normalizing...");
         const split = Math.floor(100 / basketArr.length);
         basketArr = basketArr.map((item, idx) => ({
           ...item,
@@ -881,21 +940,34 @@ function App() {
 
   const handleSaveBasket = async (e) => {
     if (e) e.preventDefault();
-    if (!basketName.trim() || basket.length === 0) return;
+    if (!basketName.trim() || basket.length === 0) {
+      setToast({ kind: 'error', text: 'Please enter a name and generate a basket first.' });
+      return;
+    }
+    const payload = { name: basketName, items: basket };
+    console.log("[UI] Saving basket with payload:", payload);
     try {
       const res = await fetch(`${API_BASE}/baskets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: basketName, items: basket }),
+        body: JSON.stringify(payload),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setToast({ kind: 'success', text: `Basket "${basketName}" saved!` });
         setBasketName(''); setBasket([]); fetchBaskets(); setActiveTab('dashboard');
       } else {
-        const data = await res.json();
-        setToast({ kind: 'error', text: data.detail || 'Failed to save basket' });
+        console.error("[UI] Save failed:", data);
+        if (res.status === 400 && data.detail?.includes("exist")) {
+          setToast({ kind: 'error', text: `A basket named "${basketName}" already exists. Please choose a different name.` });
+        } else {
+          setToast({ kind: 'error', text: data.detail || `Error: ${res.status} - Could not save basket.` });
+        }
       }
-    } catch (err) { setToast({ kind: 'error', text: `Save failed: ${err.message || err}` }); }
+    } catch (err) {
+      console.error("[UI] Network error during save:", err);
+      setToast({ kind: 'error', text: `Network error: ${err.message || err}` });
+    }
   };
 
   const handleDeleteBasket = async (name, e) => {
@@ -955,9 +1027,14 @@ function App() {
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
             <TickerSearch onSelect={handleAnalyze} disabled={analyzing} />
-            <button className="refresh-btn glass" onClick={handleRefresh} disabled={refreshing}>
-              {refreshing ? <span className="loader" style={{ width: 15, height: 15, borderWidth: '2px' }} /> : "🔄 Refresh List"}
-            </button>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button className="refresh-btn glass" onClick={handleAnalyzeAll} disabled={refreshing || analyzing}>
+                {refreshing ? <span className="loader" style={{ width: 15, height: 15, borderWidth: '2px' }} /> : "🤖 Analyze All"}
+              </button>
+              <button className="refresh-btn glass" onClick={handleRefresh} disabled={refreshing}>
+                {refreshing ? <span className="loader" style={{ width: 15, height: 15, borderWidth: '2px' }} /> : "🔄 Refresh List"}
+              </button>
+            </div>
           </div>
 
           {savedBaskets.length > 0 && (
@@ -974,7 +1051,9 @@ function App() {
                     </div>
                     <div className="basket-items-list">
                       {b.items.map((item, idx) => (
-                        <div key={idx} className="basket-item-mini-wrap">
+                        <div key={idx} className="basket-item-mini-wrap" 
+                             onClick={() => handleOpenModal(item)}
+                             style={{ cursor: 'pointer' }}>
                           <div className="basket-item-mini">
                             <span className="ticker-mini" style={{ width: 85 }}>{item.ticker}</span>
                             <span className="weight-mini">{item.percentage_weight}%</span>
@@ -1013,7 +1092,15 @@ function App() {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
                       <div className={`tag ${getTagClass(rec.action)}`}>{rec.action}</div>
-                      <button className="delete-btn glass" onClick={(e) => handleDelete(rec.ticker, e)} title="Delete recommendation">×</button>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button className="refresh-btn glass" 
+                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }} 
+                                onClick={(e) => { e.stopPropagation(); handleAnalyze(rec); }}
+                                title="Analyze Again">
+                          🔄
+                        </button>
+                        <button className="delete-btn glass" onClick={(e) => handleDelete(rec.ticker, e)} title="Delete recommendation">×</button>
+                      </div>
                     </div>
                   </div>
                   <div className="confidence">
@@ -1023,6 +1110,10 @@ function App() {
                     </div>
                   </div>
                   <div className="reasoning">{rec.reasoning}</div>
+                  <div style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{new Date(rec.timestamp).toLocaleString()}</span>
+                    <span>Model: {rec.model_name || 'AI Analyst'}</span>
+                  </div>
                 </div>
               )) : (
                 <div style={{color: 'white', gridColumn: '1 / -1', textAlign: 'center'}}>
@@ -1075,7 +1166,7 @@ function App() {
             <>
               <div className="dashboard-grid">
                 {basket.map((item, idx) => (
-                  <div key={idx} className="card glass">
+                  <div key={idx} className="card glass" onClick={() => handleOpenModal(item)}>
                     <div className="card-header" style={{ alignItems: 'flex-start', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
                       <div style={{ flex: 1 }}>
                         <div className="ticker">{item.ticker}</div>
@@ -1150,7 +1241,7 @@ function App() {
             <>
               <div className="dashboard-grid">
                 {basket.map((item, idx) => (
-                  <div key={idx} className="card glass">
+                  <div key={idx} className="card glass" onClick={() => handleOpenModal(item)}>
                     <div className="card-header" style={{ alignItems: 'flex-start', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
                       <div style={{ flex: 1 }}>
                         <div className="ticker">{item.ticker}</div>
@@ -1212,7 +1303,10 @@ function App() {
             </div>
 
             <div style={{ lineHeight: 1.8, color: '#e2e8f0', background: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: '12px', marginTop: '1.5rem' }}>
-              <h4 style={{ marginBottom: '1rem', color: 'var(--primary)' }}>AI Analyst Reasoning</h4>
+              <h4 style={{ marginBottom: '1rem', color: 'var(--primary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>AI Analyst Reasoning</span>
+                <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>Model: {selectedRec.model_name || 'AI Analyst'}</span>
+              </h4>
               <div style={{ whiteSpace: 'pre-wrap' }}>{selectedRec.reasoning}</div>
               <div style={{ marginTop: '2rem', fontSize: '0.875rem', color: 'var(--text-secondary)'}}>
                 Last updated: {new Date(selectedRec.timestamp).toLocaleString()}
